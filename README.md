@@ -1,5 +1,8 @@
 # WebOBJViewer
 View OBJ files hosted locally on your web browser.
+3D model views powered by WebGL and JavaScript.
+Native WebGL is used to avoid relying on external 3D libraries
+   and maximize customization and performance.
 
 Instructions:
 1. Open html file to launch webpage
