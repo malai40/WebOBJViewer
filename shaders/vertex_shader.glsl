@@ -36,7 +36,10 @@ void main() {
     // Update normals in fragment shader to handle 
     // // model updated with updated m matrix from rotation
     // // or scaling.
+    //TODO Testing for fix for swollen Utah teapot
+    // vnormal = normalize(vec4(transpose(inverse(mat3(v * m))) * normal, 0)); // To update normals using model matrix updating after initial draw
+    // Do not delete the next line, works!
     vnormal = vec4(mat3(v * m) * normal, 0); // To update normals using model matrix updating after initial draw
-    
+
     vuv = uv;
 }
