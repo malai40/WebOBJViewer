@@ -9,3 +9,6 @@ Instructions:
    and any linked pictures in .jpg or .png format.
 4. Use your mouse or finger to drag the object around to
    view it from any angle.
+
+Example:
+<img width="361" height="529" alt="image" src="https://github.com/user-attachments/assets/8bd01d3e-53ae-453b-8461-862bee42c767" />
