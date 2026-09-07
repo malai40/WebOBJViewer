@@ -66,7 +66,7 @@ window.addEventListener('load', async () => {
     //m_rotX = m4rotX(-Math.PI / 2); // Stand the model up. This works well since so many models struggle with export from Z-up software to Y-up WebGL
     m = m4mul(mStartXRotFix, mStartScale);
     // View matrix (like camera). [eye, lookat, world_up]
-    v = m4view([1,1,3], [0,0,0], [0,1,0]);
+    v = m4view([1,1,6], [0,0,0], [0,1,0]);
     // p = m4perspective(45 * Math.PI / 180, aspect, 0.1, 100.0);}
     // Perspective matrix
     // Source for numbers: UIUC CS 418 course website

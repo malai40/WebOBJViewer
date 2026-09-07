@@ -27,7 +27,7 @@ export class OBJLoader {
         const fileReadPromises = Array.from(files).map(file => {
             return new Promise((resolve) => {
                 const filetype = file.name.split('.').pop().toLowerCase();
-                console.log(filetype);
+                console.log("Loading ", filetype, "file...");
                 if (filetype === "obj" || filetype === "mtl") {
                     const reader = new FileReader();
                     reader.onload = (e) => {
@@ -151,6 +151,9 @@ export class OBJLoader {
             // TODO Handle triangulating obj with four vertices per face.
             // // WebGL can only handle triangles so triangulation during file I/O is needed.
             else if (tokens[0] === "f") {
+                // TODO If tokens.slice(1).length > 3, triangulate.
+                // Process the new list of truples. Or return as array if already just 3.
+                let fTriangulatedLines = this.#triangulatefLine(tokens.slice(1)); //array of 3D arrays of 3 vertices each
                 // For each combination of v/vt/vn found, we create new position in the
                 // // v, vt, vn arrays. 
                 // All v, vn and vt should be loaded.
@@ -162,39 +165,42 @@ export class OBJLoader {
                 // Add to a dictionary of materials and their faces
                 // Declare holder for the triangle defined by each 3 vertices in f line
                 let thisTri = [];
-                for (const token of tokens.slice(1)) {
-                    // Example token: "13/13/13"
-                    // Test if token is in vertexMap
-                    if (vertexMap[token] === undefined) {
-                        // Record that this unique token 
-                        // // has face at position posCounter in faces array.
-                        vertexMap[token] = posCounter;
-                        // Get subtokens
-                        const tokens_sub = token.split('/');
-                        // Read each into arrays
-                        let this_v = v_io[parseInt(tokens_sub[0]) - 1]; // vertex at pos tokens_sub-1 in v_io
-                        // Flatten with ... for WebGL buffers
-                        v.push(...this_v);
-                        if (tokens_sub.length == 2) {
-                             // Read the vt
-                             let this_vt = vt_io[parseInt(tokens_sub[1]) - 1];
-                             vt.push(...this_vt);
-                        } else if (tokens_sub.length == 3) {
-                            // See if second subtoken has anything
-                            if (tokens_sub[1].length > 0) {
+                //for (const token of tokens.slice(1)) {
+                for (const fTriangulatedLine of fTriangulatedLines) {
+                    for (const token of fTriangulatedLine) {
+                        // Example token: "13/13/13"
+                        // Test if token is in vertexMap
+                        if (vertexMap[token] === undefined) {
+                            // Record that this unique token 
+                            // // has face at position posCounter in faces array.
+                            vertexMap[token] = posCounter;
+                            // Get subtokens
+                            const tokens_sub = token.split('/');
+                            // Read each into arrays
+                            let this_v = v_io[parseInt(tokens_sub[0]) - 1]; // vertex at pos tokens_sub-1 in v_io
+                            // Flatten with ... for WebGL buffers
+                            v.push(...this_v);
+                            if (tokens_sub.length == 2) {
+                                // Read the vt
                                 let this_vt = vt_io[parseInt(tokens_sub[1]) - 1];
                                 vt.push(...this_vt);
+                            } else if (tokens_sub.length == 3) {
+                                // See if second subtoken has anything
+                                if (tokens_sub[1].length > 0) {
+                                    let this_vt = vt_io[parseInt(tokens_sub[1]) - 1];
+                                    vt.push(...this_vt);
+                                }
+                                // Read the vn
+                                let this_vn = vn_io[parseInt(tokens_sub[2]) - 1];
+                                vn.push(...this_vn);
                             }
-                            // Read the vn
-                            let this_vn = vn_io[parseInt(tokens_sub[2]) - 1];
-                            vn.push(...this_vn);
+                            thisTri.push(posCounter);
+                            // Increase posCounter
+                            posCounter++;
+                        } else {
+                            // This token is already read in.
+                            thisTri.push(vertexMap[token]);
                         }
-                        thisTri.push(posCounter);
-                        // Increase posCounter
-                        posCounter++;
-                    } else {
-                        // This token is already read in.
-                        thisTri.push(vertexMap[token]);
                     }
                 }
                 // Push this triangle to materialMap
@@ -210,7 +216,7 @@ export class OBJLoader {
         // Create new Model object (will have Material objects added later)
         const model = new Model(gl, mesh, materialLocs, materialMap);
         
-        console.log("Loader output 1:", model);
+        //console.log("Loader output 1:", model);
 
         return model;        
     }
@@ -222,7 +228,7 @@ export class OBJLoader {
     loadMaterial(fileContent, gl, model) {
         let thisMaterial = null;
         let materials = [];
-        console.log(fileContent);
+        //console.log(fileContent);
         
         const lines = fileContent.split('\n');
         
@@ -232,17 +238,17 @@ export class OBJLoader {
             const tokens = line.split(' '); // TODO Check if OBJ ever uses other splits like tabs
             
             if (tokens[0] === "newmtl") {
-                console.log(tokens[0]);
+                // console.log(tokens[0]);
                 // Finalize any existing Material object
                 if (!thisMaterial == null) {
                     materials.push(thisMaterial);
-                    console.log("This material:", thisMaterial);
-                    console.log("Materials so far:", materials);
+                    //console.log("This material:", thisMaterial);
+                    //console.log("Materials so far:", materials);
                 }
                 // Set name for new Material object
                 thisMaterial = new Material(gl, tokens[1]);
-                console.log("This material:", thisMaterial);
-                console.log("Materials so far:", materials);
+                //console.log("This material:", thisMaterial);
+                //console.log("Materials so far:", materials);
             }
             else if (tokens[0] === "Ka") {
                 thisMaterial.Ka = [parseFloat(tokens[1]), parseFloat(tokens[2]), parseFloat(tokens[3])];
@@ -346,5 +352,41 @@ export class OBJLoader {
         
         return model;
     }
-        
+    
+    /**
+     * If tokens.slice(1).length > 3, triangulate.
+     * Process the new list of truples. Or return as array if already just 3.
+     * This version uses fan triangulation, which is O(n) but can't handle concave polygons.
+     * Another version will use ear clipping which while significantly slower can handle concave polygons.
+     * Do not use this function with concave polygons, otherwise visual errors may result.
+     * This function assumes the points are in CCW order, and it triangulates in CCW order. 
+     * TODO Find if issues triangulating CCW on CW-ordered polygon.
+     * fTriangulatedLines = triangulatefLine(tokens.slice(1)); //array of 3D arrays of 3 vertices each
+     */
+    #triangulatefLine(fTokens) {
+        if (fTokens.length <= 3) {
+            return [fTokens];
+        } else {
+            //console.log("Triangulating: ", fTokens);
+            const n = fTokens.length;
+            let triangulatedTokens = [];
+            let thisTriMid = [];
+            let thisTriFnl = [];
+            // Phase 1: Start at v1
+            // Phase 2: Loop through all vertices from 
+            // // (v1 + 2) to (v1 + (n - 1)).
+            // // i starts at 3 and ends at (n - 1).
+            // // Doing [v1, v(i-1), v(i)]. Switch to [v1, v(i), v(i-1)] for CW triangulation.
+            for (let i = 3; i < n; i++) {
+                thisTriMid = [fTokens[1], fTokens[i-1], fTokens[i]];
+                triangulatedTokens.push(thisTriMid);
+            }
+            // Phase 3: Do [v1, v(n-1), v0] (or [v1, v0, v(n-1)] for CW triang). Finished.
+            thisTriFnl = [fTokens[1], fTokens[n-1], fTokens[0]];
+            triangulatedTokens.push(thisTriFnl);
+            //console.log("Result: ", triangulatedTokens);
+            return triangulatedTokens;
+
+        }
+    }
 }
