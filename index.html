@@ -3,17 +3,22 @@
 <head>
     <meta charset="utf-8">
     <title>Web 3D Viewer</title>
-
+    <link rel="stylesheet" href="styles/main.css">
 </head>
 <body>
 
-<h1>Web OBJ Viewer</h1>
-<p>Preview an .obj file with linked .mtl and texture files.</p>
-<p>Your model will appear in the gray canvas below.</p>
-<canvas width="900" height="900" style="background-color: rgb(127, 127, 127);" id="webgl-canvas"></canvas>
-<p>Load OBJ files below:</p>
-<input type="file" id="filesInput" multiple>
+<div class="header-text-container">
+    <h1>Web OBJ Viewer</h1>
+    <p>Preview an .obj file with linked .mtl and texture files.</p>
+    <p>Your model will appear in the gray canvas below.</p>
+</div>
 
+<canvas width="600" height="600" style="background-color: rgb(127, 127, 127);" id="webgl-canvas"></canvas>
+
+<div class="footer-text-container">
+    <p>Load OBJ files below:</p>
+    <input type="file" id="filesInput" multiple>
+</div>
 <script src="js/math.js"></script>
 <script type = "module" src="js/main.js" defer></script>
 
