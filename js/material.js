@@ -56,10 +56,14 @@ export class Material {
         const color_KdLoc = gl.getUniformLocation(program, "color_Kd");
         const color_KaLoc = gl.getUniformLocation(program, "color_Ka");
         const color_KsLoc = gl.getUniformLocation(program, "color_Ks");
+        const NsLoc = gl.getUniformLocation(program, "Ns");
         const useTexLoc = gl.getUniformLocation(program, "u_useTexture"); // The bool
         const samplerLoc = gl.getUniformLocation(program, "u_textureSampler");
         // Pass them in
         gl.uniform4fv(color_KdLoc, [...this.Kd, this.d]); 
+        gl.uniform3fv(color_KaLoc, this.Ka);
+        gl.uniform3fv(color_KsLoc, this.Ks);
+        gl.uniform1f(NsLoc, this.Ns);
         // Call the image per map
         const activeTexture = localImagesBlobMap[this.map_Kd];
         if (this.map_Kd.length > 0 && activeTexture) {

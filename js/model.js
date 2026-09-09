@@ -69,7 +69,7 @@ export class Model {
                 gl.uniformMatrix4fv(vLocation, false, v);
                 gl.uniformMatrix4fv(pLocation, false, p);
                 
-                gl.uniform3fv(gl.getUniformLocation(program, "lightDir"), new Float32Array([0.0, -1.0, 1.0]));
+                gl.uniform3fv(gl.getUniformLocation(program, "lightDir"), new Float32Array([0.0, 1.0, 1.0]));
                 gl.uniform3fv(gl.getUniformLocation(program, "lightColor"), new Float32Array([1.0, 1.0, 1.0]));
                 
                 material.applyUniforms(this.localImagesBlobMap);
