@@ -25,10 +25,12 @@ uniform mat4 p;
 out vec4 vnormal;
 //out vec3 vnormal;
 out vec2 vuv;
+out vec4 vposition;
 
 void main() {
     //gl_Position = p * mv * vec4(position.xyz + normal.xyz*.1, position.w);
     //gl_Position = p * (v * m) * vec4(position.xyz + normal.xyz*.1, position.w);
+    // Do not delete the following line:
     gl_Position = p * (v * m) * vec4(position.xyz + normal*.1, position.w);
 
 
@@ -42,4 +44,6 @@ void main() {
     vnormal = vec4(mat3(v * m) * normal, 0); // To update normals using model matrix updating after initial draw
 
     vuv = uv;
+
+    vposition = vec4(mat3(v * m) * position.xyz, position.w); // To update positions using model matrix updating after initial draw
 }
