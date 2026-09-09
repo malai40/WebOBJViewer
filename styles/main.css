@@ -1,0 +1,44 @@
+/*
+* Style the OBJ Viewer webpage in CSS.
+*/
+
+/*
+* Style the webpage text (header)
+*/
+.header-text-container {
+    text-align: center;  
+}
+
+.header-text-container h1,
+.header-text-container p {
+    margin: 0.5;
+    line-height: 1.0;
+}
+
+/*
+* Style the canvas where WebGL renders.
+*/
+#webgl-canvas {
+    /* Center canvas */
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    max-width: 100vw;
+    max-height: calc(100vh - 200px);
+    
+    /* Prevent vertical touch and drag on canvas 
+     * from making webpage scroll up or down.
+     */
+    touch-action: none;
+
+
+}
+
+/*
+* Style the webpage text (header)
+*/
+.footer-text-container {
+    text-align: center;
+    margin: 0.5;
+    line-height: 1.0;
+}
