@@ -1,0 +1,10 @@
+Credits for OBJ models shown in examples.
+
+Capsule: https://paulbourke.net/dataformats/obj/minobj.html
+
+Utah teapot: https://graphics.cs.utah.edu/teapot/
+
+Bowl of apples: https://free3d.com/3d-model/apples-830194.html#
+
+Human: https://free3d.com/3d-model/male-base-mesh-6682.html
+
