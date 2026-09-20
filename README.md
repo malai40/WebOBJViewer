@@ -15,4 +15,5 @@ Instructions:
 
 Example:
 
-<img width="361" height="529" alt="image" src="https://github.com/user-attachments/assets/8bd01d3e-53ae-453b-8461-862bee42c767" />
+<img width="588" height="670" alt="capsule_09 20 26" src="https://github.com/user-attachments/assets/e5ad61ce-6075-48da-9cdd-a7f606aa3350" />
+
