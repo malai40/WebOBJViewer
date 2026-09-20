@@ -1,0 +1,8 @@
+# macOS system files
+.DS_Store
+
+# Misc
+instructions to run.txt
+models/
+shaders/old
+shaders/under_construction

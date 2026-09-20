@@ -74,8 +74,35 @@ export class TriangularMesh {
         // 4) Create face buffer
         const faceBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, faceBuffer);
-        const f_uint16 = new Uint16Array(this.f);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, f_uint16, buffer_usage);
+        // f_uint16 version for wide capability, but wont work with meshes above 65,353 vertices.
+        let f_uint16or32 = null;
+        if ((this.v.length / 3) < 65536) {
+            f_uint16or32 = new Uint16Array(this.f);
+        } else {
+            f_uint16or32 = new Uint32Array(this.f);
+        }
+        //const f_uint16 = new Uint16Array(this.f);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, f_uint16or32, buffer_usage);
+        
+       // f_u version for high vertex support
+        //const f_uint32 = new Uint32Array(this.f);
+ 
+        /*
+        let maxIndex = 0;
+        const f_uint32 = new Uint32Array(this.f.flat());
+        for (let i = 0; i < f_uint32.length; i++) {
+            if (f_uint32[i] > maxIndex) {
+                maxIndex = f_uint32[i];
+            }
+        }
+        */
+
+        //console.log("Max index requested:", maxIndex);
+        //console.log("Total vertices available:", 130953);
+        
+        
+        //gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, f_uint32, buffer_usage);
+
 
         // Bind vertex arrays to gl and close the VAO recording.
         // TODO Debug this erasing everything. Then uncomment.
@@ -102,5 +129,15 @@ export class TriangularMesh {
         p0_p1 = sub(p0, p1);
         
         return normalize(cross(p2_p1, p0_p1));
+    }
+
+    /**
+     * Function to calculate vertex normal given vertex and that face's normal
+     * @param {array} v: Array of vertices in format [X1 Y1 Z1] 
+     * @param {*} triNorm: Normal of triangle touching this vertex
+     * TODO
+     */
+    #getVertexNormal(v, triNorm) {
+        return;
     }
 }

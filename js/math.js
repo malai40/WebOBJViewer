@@ -1,6 +1,6 @@
 /**
  * JavaScript math library focusing on linear algbera.
- * Source: Luther Tychonievich for UIUC CS 418: https://cs418.cs.illinois.edu/website/code/math.js
+ * Source for small version for WebGL: Luther Tychonievich for UIUC CS 418: https://cs418.cs.illinois.edu/website/code/math.js
  */
 
 // vector ops

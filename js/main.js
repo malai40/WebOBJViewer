@@ -3,6 +3,7 @@ import { Material } from './material.js';
 import { TriangularMesh } from './mesh.js';
 import { Model } from './model.js';
 import { OBJLoader } from './obj_loader.js';
+import { BoundingBox } from './bounding_box.js';
 
 // Get elements
 const filesInput = document.getElementById("filesInput");
@@ -21,8 +22,10 @@ let p = null;
 
 // Declare default axis rotational fix and scaling
 // Source for m4rotX numbers: UIUC CS 418 course website
-let mStartXRotFix = m4rotX(-Math.PI / 2);
-let mStartScale = m4scale(0.5, 0.5, 0.5);
+//let mStartXRotFix = m4rotX(-Math.PI / 2);
+//let mStartScale = m4scale(0.5, 0.5, 0.5);
+let mCenterTransFix = m4trans(0.0, 0.0, 0.0);
+let mCenterTransFixReverse = m4trans(0.0, 0.0, 0.0);
 
 /**
  * Draw loop that updates the model on screen.
@@ -64,7 +67,7 @@ window.addEventListener('load', async () => {
     // Rotate model to help Z-up to Y-up translation shenanigans, then scale to fit within canvas
     // By default it loads at (0, 0, 0) which is center of canvas
     //m_rotX = m4rotX(-Math.PI / 2); // Stand the model up. This works well since so many models struggle with export from Z-up software to Y-up WebGL
-    m = m4mul(mStartXRotFix, mStartScale);
+    //m = m4mul(mStartXRotFix, mStartScale);
     // View matrix (like camera). [eye, lookat, world_up]
     v = m4view([1,1,3], [0,0,0], [0,1,0]);
     // p = m4perspective(45 * Math.PI / 180, aspect, 0.1, 100.0);}
@@ -74,6 +77,7 @@ window.addEventListener('load', async () => {
     
     // Declare window program
     // Cleanse shader files of Windows carriage returns
+    // TODO Load various programs combining different shaders per illum type. Lambertian, Phong, etc.
     const vs = await fetch('./shaders/vertex_shader.glsl').then(res => res.text()).then(text => text.replace(/\r/g, '').trim());
     const fs = await fetch('./shaders/fragment_shader.glsl').then(res => res.text()).then(text => text.replace(/\r/g, '').trim());
     window.program = compile(vs,fs);
@@ -120,7 +124,7 @@ function setupDragToMove() {
 
             // Get the final result
             //m = m4mul(mrotX, mrotY);
-            m = m4mul(m, mrotY, mrotZ); //, mStartXRotFix); //, mStartScale);
+            m = m4mul(m, mCenterTransFixReverse, mrotY, mrotZ, mCenterTransFix); //, mStartXRotFix); //, mStartScale);
         }
     });
 
@@ -162,6 +166,44 @@ filesInput.addEventListener("change", async (event) => {
     
     // Push model to global scope so window can see it
     currentModel = model;
+
+    // Calculate starting rotation and scale based on model stats
+    // m = m4mul(mStartXRotFix, mStartScale);
+    const boundingBox = model.boundingBox;
+    // console.log(boundingBox, boundingBox.get_center(), boundingBox.get_longest_axis());
+    // 1. Make sure model is Scaled so longest axis is less than 1.5 (total canvas is [-1, +1] plus breathing room on all sides)
+    const len_longest_axis = boundingBox.get_len_axis(boundingBox.get_longest_axis());
+    const scale_factor = 2.0 / len_longest_axis;
+    const mStartScale = m4scale(scale_factor, scale_factor, scale_factor);
+    // const mStartScale = m4scale(0.5, 0.5, 0.5);
+    // 2. Make sure model is Rotated by assume if this is Y up or Z up
+    // TODO Have user choose if Y up or Z up
+    // Assume Y up if len_y > len_z, or assume Z up if len_z > len_y
+    let mStartXRotFix = m4rotX(0);
+    if (boundingBox.get_longest_axis() == 2) { // Z axis is longer than Y, so assume model is Z up
+        mStartXRotFix = m4rotX(-Math.PI / 2);
+    } else { // Y axis is longer than Z, so no rotation (model is already Y up)
+        //const mStartXRotFix = m4rotX(0);
+    }
+    // mStartXRotFix = m4rotX(-Math.PI / 2);
+    // 3. Make sure model is Translated so center becomes (0,0,0)
+    //console.log(boundingBox.get_center());
+    let dx = 0;
+    let dy = 0;
+    let dz = 0;
+    const center = boundingBox.get_center();
+    if (center[0] != 0) {
+        dx = 0 - center[0];
+    }
+    if (center[1] != 0) {
+        dy = 0 - center[1];
+    }
+    if (center[2] != 0) {
+        dz = 0 - center[2];
+    }
+    mCenterTransFix = m4trans(dx,dy,dz);
+    mCenterTransFixReverse = m4trans(dx * -1, dy * -1, dz * -1);
+    m = m4mul(mStartXRotFix, mStartScale, mCenterTransFix);
     
     // Begin animating the model on screen
     requestAnimationFrame(renderLoop);

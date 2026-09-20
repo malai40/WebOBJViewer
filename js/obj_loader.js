@@ -2,6 +2,7 @@
 import { Material } from './material.js';
 import { TriangularMesh } from './mesh.js';
 import { Model } from './model.js';
+import { BoundingBox } from './bounding_box.js';
 
 /**
  * Object that loads .obj files and components
@@ -41,7 +42,7 @@ export class OBJLoader {
                         resolve();
                     };
                     reader.readAsText(file);
-                } else if (["png", "jpg", "jpeg"].includes(filetype)){
+                } else if (["png", "jpg", "jpeg", "tif"].includes(filetype)){
                     // Assume it's texture image and try to load
                     // TODO Error handling and file type restrictins.
                     localImagesBlobMap[file.name] = file;
@@ -75,7 +76,7 @@ export class OBJLoader {
         // Process images
         model = this.loadTextures(localImagesBlobMap, gl, model);
         
-        console.log("Loader output 0:", model);
+        //console.log("Loader output 0:", model);
         return model;
         
     }
@@ -90,10 +91,14 @@ export class OBJLoader {
         let vn = [];
         let vt = [];
         let f = [];
+
+        let min_vector = [0.0, 0.0, 0.0];
+        let max_vector = [0.0, 0.0, 0.0];
         
         let thisMaterial = '';
         
         let materialMap = {}; // To track which vertices go to which face integer
+        let materialMapCounter = 0; // Which call of this material are we on?
         let vertexMap = {}; // To track unique vertices
         
         let posCounter = 0;
@@ -108,14 +113,35 @@ export class OBJLoader {
         
         for (const line of lines) {
             // Split line into tokens
-            const tokens = line.split(' '); // TODO Check if OBJ ever uses other splits like tabs
-            
+            let line_clean = line.replace(/\s+$/, '');
+            const tokens = line_clean.split(/\s+/); // TODO Check if OBJ ever uses other splits like tabs
+            //console.log(tokens[0]);
             // Save any line starting with "v" as a vertex.
             if (tokens[0] === "v") {
                 let x = parseFloat(tokens[1]);
                 let y = parseFloat(tokens[2]);
                 let z = parseFloat(tokens[3]);
                 v_io.push([x, y, z]);
+
+                // TODO Make more efficient
+                if (x < min_vector[0]) {
+                    min_vector[0] = x;
+                }
+                if (x > max_vector[0]) {
+                    max_vector[0] = x;
+                }
+                if (y < min_vector[1]) {
+                    min_vector[1] = y;
+                }
+                if (y > max_vector[1]) {
+                    max_vector[1] = y;
+                }
+                if (z < min_vector[2]) {
+                    min_vector[2] = z;
+                }
+                if (z > max_vector[2]) {
+                    max_vector[2] = z;
+                }
             }
             // Save any line starting with "vn" as a vertex normal.
             else if (tokens[0] === "vn") {
@@ -141,6 +167,13 @@ export class OBJLoader {
             // // Each Material object will define its own shader program.
             else if (tokens[0] === "usemtl") {
                 thisMaterial = tokens[1];
+                // If thisMaterial is already in the materialMap,
+                // // start a new array to bucket different starts and lengths to 
+                // // paint this material.
+                if (thisMaterial in materialMap) {
+                    materialMapCounter++;
+                    //console.log("materialMapCounter now: ", materialMapCounter);
+                }
             }
             // Save any line starting with "f" as a face.
             // "f" lines can look like 1/1/1 2/2/2 3/3/3
@@ -150,10 +183,16 @@ export class OBJLoader {
             // OBJ starts counting from 1, not 0.    
             // TODO Handle triangulating obj with four vertices per face.
             // // WebGL can only handle triangles so triangulation during file I/O is needed.
+            // For recording which faces are painted with this, only push offset in faces array
+            // // and how many faces after that to apply the material to.
+            // // e.g. "Wood": [0, 10], "Metal": [11, 200], "Skin": [211, 25], etc.
+            // // Find the offset as f.length
+            // // Find the number of faces to work with as add to counter.
             else if (tokens[0] === "f") {
                 // TODO If tokens.slice(1).length > 3, triangulate.
                 // Process the new list of truples. Or return as array if already just 3.
                 let fTriangulatedLines = this.#triangulatefLine(tokens.slice(1)); //array of 3D arrays of 3 vertices each
+                //console.log(fTriangulatedLines);
                 // For each combination of v/vt/vn found, we create new position in the
                 // // v, vt, vn arrays. 
                 // All v, vn and vt should be loaded.
@@ -179,20 +218,29 @@ export class OBJLoader {
                             // Read each into arrays
                             let this_v = v_io[parseInt(tokens_sub[0]) - 1]; // vertex at pos tokens_sub-1 in v_io
                             // Flatten with ... for WebGL buffers
+                            //console.log("pushed this_v", this_v);
                             v.push(...this_v);
+                            
                             if (tokens_sub.length == 2) {
                                 // Read the vt
                                 let this_vt = vt_io[parseInt(tokens_sub[1]) - 1];
+                                //console.log("pushed this_vt", this_vt);
                                 vt.push(...this_vt);
+                                
                             } else if (tokens_sub.length == 3) {
                                 // See if second subtoken has anything
                                 if (tokens_sub[1].length > 0) {
                                     let this_vt = vt_io[parseInt(tokens_sub[1]) - 1];
+                                    //console.log("pushed this_vt", this_vt);
                                     vt.push(...this_vt);
+                                    
                                 }
                                 // Read the vn
                                 let this_vn = vn_io[parseInt(tokens_sub[2]) - 1];
+                                //console.log("pushed this_vn", this_vn);
                                 vn.push(...this_vn);
+                                
+                                //console.log("pushed this_vn");
                             }
                             thisTri.push(posCounter);
                             // Increase posCounter
@@ -204,17 +252,46 @@ export class OBJLoader {
                     }
                 }
                 // Push this triangle to materialMap
-                materialMap[thisMaterial] ||= []; 
-                materialMap[thisMaterial].push(thisTri);
+                // materialMap[thisMaterial] ||= []; // If materialMap doesn't already have this key, add it with val [].
+                // materialMap[thisMaterial].push(thisTri);
+                if (thisMaterial != '' && !(thisMaterial in materialMap)) { // If materialMap doesn't already have this key
+                    materialMap[thisMaterial] = [[f.length, thisTri.length]];
+                    //materialMap[thisMaterial].push([f.length, thisTri.length]);
+                    //console.log("new materialMap says: ", materialMap[thisMaterial]);
+                } else if (thisMaterial in materialMap) { // materialMap already has this key
+                    //console.log("old materialMap says: ", materialMap[thisMaterial]);
+                    if (materialMap[thisMaterial].length < (materialMapCounter + 1)) { // This is not the first call to this material
+                        materialMap[thisMaterial].push([f.length, thisTri.length]);
+                        //console.log("This material is seen again, new offset: ", materialMap[thisMaterial]);
+                    } else {
+                        materialMap[thisMaterial][materialMapCounter][1] += thisTri.length;
+                        //console.log("This material is seen ith time: ", materialMap[thisMaterial]);
+                    }
+                    
+                }
+                
+                
                 // Push this triangle (face) to f array. Flattened for WebGL buffer.
+                //console.log(thisTri);
                 f.push(...thisTri);
             }             
         }
         // Create Mesh Object
         const mesh = new TriangularMesh(gl, v, f, vn, vt);
+
+        // Make a Bounding Box based on min and max xyz coordinates
+        // v_io
+        const boundingBox = new BoundingBox(min_vector, max_vector);
         
         // Create new Model object (will have Material objects added later)
-        const model = new Model(gl, mesh, materialLocs, materialMap);
+        // Switch type based on vertex count
+        let this_type = null;
+        if (v.length > (65536 * 3)) {
+            this_type = gl.UNSIGNED_INT;
+        } else {
+            this_type = gl.UNSIGNED_SHORT;
+        }
+        const model = new Model(gl, this_type, mesh, boundingBox, materialLocs, materialMap);
         
         //console.log("Loader output 1:", model);
 
@@ -224,10 +301,12 @@ export class OBJLoader {
     
     /**
      * Load material from .mtl file
+     * TODO Only load a material if the .mtl file was properly declared in the .obj file
      */
     loadMaterial(fileContent, gl, model) {
+        //console.log("Load new material: ");
         let thisMaterial = null;
-        let materials = [];
+        let materials = {};
         //console.log(fileContent);
         
         const lines = fileContent.split('\n');
@@ -235,13 +314,16 @@ export class OBJLoader {
         for (const line of lines) {
             
             // Split line into tokens
-            const tokens = line.split(' '); // TODO Check if OBJ ever uses other splits like tabs
+            let line_clean = line.replace(/\s+$/, '');
+            const tokens = line_clean.split(/\s+/); // TODO Check if OBJ ever uses other splits like tabs
             
             if (tokens[0] === "newmtl") {
-                // console.log(tokens[0]);
+                //console.log(tokens[0]);
                 // Finalize any existing Material object
-                if (!thisMaterial == null) {
-                    materials.push(thisMaterial);
+                if (!(thisMaterial == null)) {
+                    //materials.push(thisMaterial);
+                    //console.log("Load new material: ", thisMaterial);
+                    materials[thisMaterial.name] = thisMaterial;
                     //console.log("This material:", thisMaterial);
                     //console.log("Materials so far:", materials);
                 }
@@ -278,19 +360,250 @@ export class OBJLoader {
                 thisMaterial.Ni = parseFloat(tokens[1]);
             } 
             else if (tokens[0] === "map_Ka") {
-                thisMaterial.map_Ka = tokens[1];
+                //thisMaterial.map_Ka = tokens[1];
+                // Look through all tokens and see what is there.
+                // Do not assume order of tokens or filename
+                for (let i = 1; i < tokens.length; i++) {
+                    if (tokens[i] === "-blendu") {
+                        if (tokens[i+1] === "on") {
+                            thisMaterial.blendu_Ka = 1;
+                        } else if (tokens[i+1] === "off")
+                            thisMaterial.blendu_Ka = 0;
+                        i += 2;    
+                    }
+                    else if (tokens[i] === "-blendv") {
+                        if (tokens[i+1] === "on") {
+                            thisMaterial.blendv_Ka = 1;
+                        } else if (tokens[i+1] === "off")
+                            thisMaterial.blendv_Ka = 0;
+                        i += 2;    
+                    }
+                    else if (tokens[i] === "-cc") {
+                        if (tokens[i+1] === "on") {
+                            thisMaterial.cc_Ka = 1;
+                        } else if (tokens[i+1] === "off")
+                            thisMaterial.cc_Ka = 0;
+                        i += 2;    
+                    }
+                    else if (tokens[i] === "-clamp") {
+                        if (tokens[i+1] === "on") {
+                            thisMaterial.clamp_Ka = 1;
+                        } else if (tokens[i+1] === "off")
+                            thisMaterial.clamp_Ka = 0;
+                        i += 2;    
+                    }
+                    else if (tokens[i] === "-mm") {
+                        thisMaterial.mm_base_Ka = parseFloat(tokens[i+1]);
+                        thisMaterial.mm_gain_Ka = parseFloat(tokens[i+2]);
+                        i += 3;    
+                    }
+                    else if (tokens[i] === "-o") {
+                        thisMaterial.o_Ka = [parseFloat(tokens[i+1]), parseFloat(tokens[i+2]), parseFloat(tokens[i+3])];
+                        i += 4;    
+                    }
+                    else if (tokens[i] === "-s") {
+                        thisMaterial.s_Ka = [parseFloat(tokens[i+1]), parseFloat(tokens[i+2]), parseFloat(tokens[i+3])];
+                        i += 4;    
+                    }
+                    else if (tokens[i] === "-t") {
+                        thisMaterial.t_Ka = [parseFloat(tokens[i+1]), parseFloat(tokens[i+2]), parseFloat(tokens[i+3])];
+                        i += 4;    
+                    }
+                    else if (tokens[i] === "-texres") {
+                        thisMaterial.texres_Ka = parseFloat(tokens[i+1]);
+                        i += 2;    
+                    }
+                    else {
+                        thisMaterial.map_Ka = tokens[i];
+                        i += 2;
+                    }
+                }
+                //thisMaterial.map_Ka = tokens[tokens.length - 1];
             } 
             else if (tokens[0] === "map_Kd") {
-                thisMaterial.map_Kd = tokens[1];
+                //thisMaterial.map_Kd = tokens[1];
+                // Look through all tokens and see what is there.
+                // Do not assume order of tokens or filename
+                for (let i = 1; i < tokens.length; i) {
+                    //console.log("Kd token is ", tokens[i]);
+                    if (tokens[i] === "-blendu") {
+                        if (tokens[i+1] === "on") {
+                            thisMaterial.blendu_Kd = 1;
+                        } else if (tokens[i+1] === "off")
+                            thisMaterial.blendu_Kd = 0;
+                        i += 2;    
+                    }
+                    else if (tokens[i] === "-blendv") {
+                        if (tokens[i+1] === "on") {
+                            thisMaterial.blendv_Kd = 1;
+                        } else if (tokens[i+1] === "off")
+                            thisMaterial.blendv_Kd = 0;
+                        i += 2;    
+                    }
+                    else if (tokens[i] === "-cc") {
+                        if (tokens[i+1] === "on") {
+                            thisMaterial.cc_Kd = 1;
+                        } else if (tokens[i+1] === "off")
+                            thisMaterial.cc_Kd = 0;
+                        i += 2;    
+                    }
+                    else if (tokens[i] === "-clamp") {
+                        if (tokens[i+1] === "on") {
+                            thisMaterial.clamp_Kd = 1;
+                        } else if (tokens[i+1] === "off")
+                            thisMaterial.clamp_Kd = 0;
+                        i += 2;    
+                    }
+                    else if (tokens[i] === "-mm") {
+                        thisMaterial.mm_base_Kd = parseFloat(tokens[i+1]);
+                        thisMaterial.mm_gain_Kd = parseFloat(tokens[i+2]);
+                        i += 3;    
+                    }
+                    else if (tokens[i] === "-o") {
+                        thisMaterial.o_Kd = [parseFloat(tokens[i+1]), parseFloat(tokens[i+2]), parseFloat(tokens[i+3])];
+                        i += 4;    
+                    }
+                    else if (tokens[i] === "-s") {
+                        thisMaterial.s_Kd = [parseFloat(tokens[i+1]), parseFloat(tokens[i+2]), parseFloat(tokens[i+3])];
+                        i += 4;    
+                    }
+                    else if (tokens[i] === "-t") {
+                        thisMaterial.t_Kd = [parseFloat(tokens[i+1]), parseFloat(tokens[i+2]), parseFloat(tokens[i+3])];
+                        i += 4;    
+                    }
+                    else if (tokens[i] === "-texres") {
+                        thisMaterial.texres_Kd = parseFloat(tokens[i+1]);
+                        i += 2;    
+                    }
+                    else {
+                        //console.log("Found a mtl name: ", tokens[i]);
+                        thisMaterial.map_Kd = tokens[i];
+                        i += 2;
+                    }
+                }
             } 
             else if (tokens[0] === "map_Ks") {
-                thisMaterial.map_Ks = tokens[1];
+                //thisMaterial.map_Ks = tokens[1];
+                // Look through all tokens and see what is there.
+                // Do not assume order of tokens or filename
+                for (let i = 1; i < tokens.length; i++) {
+                    if (tokens[i] === "-blendu") {
+                        if (tokens[i+1] === "on") {
+                            thisMaterial.blendu_Ks = 1;
+                        } else if (tokens[i+1] === "off")
+                            thisMaterial.blendu_Ks = 0;
+                        i += 2;    
+                    }
+                    else if (tokens[i] === "-blendv") {
+                        if (tokens[i+1] === "on") {
+                            thisMaterial.blendv_Ks = 1;
+                        } else if (tokens[i+1] === "off")
+                            thisMaterial.blendv_Ks = 0;
+                        i += 2;    
+                    }
+                    else if (tokens[i] === "-cc") {
+                        if (tokens[i+1] === "on") {
+                            thisMaterial.cc_Ks = 1;
+                        } else if (tokens[i+1] === "off")
+                            thisMaterial.cc_Ks = 0;
+                        i += 2;    
+                    }
+                    else if (tokens[i] === "-clamp") {
+                        if (tokens[i+1] === "on") {
+                            thisMaterial.clamp_Ks = 1;
+                        } else if (tokens[i+1] === "off")
+                            thisMaterial.clamp_Ks = 0;
+                        i += 2;    
+                    }
+                    else if (tokens[i] === "-mm") {
+                        thisMaterial.mm_base_Ks = parseFloat(tokens[i+1]);
+                        thisMaterial.mm_gain_Ks = parseFloat(tokens[i+2]);
+                        i += 3;    
+                    }
+                    else if (tokens[i] === "-o") {
+                        thisMaterial.o_Ks = [parseFloat(tokens[i+1]), parseFloat(tokens[i+2]), parseFloat(tokens[i+3])];
+                        i += 4;    
+                    }
+                    else if (tokens[i] === "-s") {
+                        thisMaterial.s_Ks = [parseFloat(tokens[i+1]), parseFloat(tokens[i+2]), parseFloat(tokens[i+3])];
+                        i += 4;    
+                    }
+                    else if (tokens[i] === "-t") {
+                        thisMaterial.t_Ks = [parseFloat(tokens[i+1]), parseFloat(tokens[i+2]), parseFloat(tokens[i+3])];
+                        i += 4;    
+                    }
+                    else if (tokens[i] === "-texres") {
+                        thisMaterial.texres_Ks = parseFloat(tokens[i+1]);
+                        i += 2;    
+                    }
+                    else {
+                        thisMaterial.map_Ks = tokens[i];
+                        i += 2;
+                    }
+                }
             }
             else if (tokens[0] === "map_Ns") {
                 thisMaterial.map_Ns = tokens[1];
             }
             else if (tokens[0] === "map_d") {
-                thisMaterial.map_d = tokens[1];
+                //thisMaterial.map_Ks = tokens[1];
+                // Look through all tokens and see what is there.
+                // Do not assume order of tokens or filename
+                for (let i = 1; i < tokens.length; i++) {
+                    if (tokens[i] === "-blendu") {
+                        if (tokens[i+1] === "on") {
+                            thisMaterial.blendu_d = 1;
+                        } else if (tokens[i+1] === "off")
+                            thisMaterial.blendu_d = 0;
+                        i += 2;    
+                    }
+                    else if (tokens[i] === "-blendv") {
+                        if (tokens[i+1] === "on") {
+                            thisMaterial.blendv_d = 1;
+                        } else if (tokens[i+1] === "off")
+                            thisMaterial.blendv_d = 0;
+                        i += 2;    
+                    }
+                    else if (tokens[i] === "-cc") {
+                        if (tokens[i+1] === "on") {
+                            thisMaterial.cc_d = 1;
+                        } else if (tokens[i+1] === "off")
+                            thisMaterial.cc_d = 0;
+                        i += 2;    
+                    }
+                    else if (tokens[i] === "-clamp") {
+                        if (tokens[i+1] === "on") {
+                            thisMaterial.clamp_d = 1;
+                        } else if (tokens[i+1] === "off")
+                            thisMaterial.clamp_d = 0;
+                        i += 2;    
+                    }
+                    else if (tokens[i] === "-mm") {
+                        thisMaterial.mm_base_d = parseFloat(tokens[i+1]);
+                        thisMaterial.mm_gain_d = parseFloat(tokens[i+2]);
+                        i += 3;    
+                    }
+                    else if (tokens[i] === "-o") {
+                        thisMaterial.o_d = [parseFloat(tokens[i+1]), parseFloat(tokens[i+2]), parseFloat(tokens[i+3])];
+                        i += 4;    
+                    }
+                    else if (tokens[i] === "-s") {
+                        thisMaterial.s_d = [parseFloat(tokens[i+1]), parseFloat(tokens[i+2]), parseFloat(tokens[i+3])];
+                        i += 4;    
+                    }
+                    else if (tokens[i] === "-t") {
+                        thisMaterial.t_d = [parseFloat(tokens[i+1]), parseFloat(tokens[i+2]), parseFloat(tokens[i+3])];
+                        i += 4;    
+                    }
+                    else if (tokens[i] === "-texres") {
+                        thisMaterial.texres_d = parseFloat(tokens[i+1]);
+                        i += 2;    
+                    }
+                    else {
+                        thisMaterial.map_d = tokens[i];
+                        i += 2;
+                    }
+                }
             }
             else if (tokens[0] === "disp") {
                 thisMaterial.disp = tokens[1];
@@ -305,11 +618,14 @@ export class OBJLoader {
         }
 
         // Assign last Material to list
-        materials.push(thisMaterial);
+        //materials.push(thisMaterial);
+        materials[thisMaterial.name] = thisMaterial;
+        //console.log("Material Kd: ", materials["Wolf_Eyes"].map_Kd);
         
         // Assign the materials list to Model.
-        model.materials.push(...materials);
-        
+        //model.materials.push(...materials);
+        model.materialsMapObjects = materials; //materials.push(...materials);
+
         return model;
     }
     
