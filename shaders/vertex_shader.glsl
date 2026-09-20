@@ -29,7 +29,6 @@ out vec4 vposition;
 
 void main() {
     //gl_Position = p * mv * vec4(position.xyz + normal.xyz*.1, position.w);
-    //gl_Position = p * (v * m) * vec4(position.xyz + normal.xyz*.1, position.w);
     // Do not delete the following line:
     // How to render the screen vertices
     //gl_Position = p * (v * m) * vec4(position.xyz + normal*.1, position.w);
